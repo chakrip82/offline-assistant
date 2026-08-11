@@ -97,6 +97,16 @@ class Orchestrator:
                 log.info("Tool call: %s(%s)", name, args)
                 tool_output = registry.call(name, args)
                 tools_used.append(name)
+
+                # Recalled facts are exact user-provided data. Return them directly
+                # so the language model cannot alter their spelling or replace them
+                # with unrelated world knowledge. Saved facts continue through the
+                # loop, allowing the model to save additional facts from one turn.
+                if name == "recall_fact":
+                    self.db.add_turn(self.session_id, "assistant", tool_output)
+                    self._maybe_store_long_term(user_text, tool_output)
+                    return TurnResult(text=tool_output, tool_calls_made=tools_used)
+
                 messages.append(ChatMessage(role="tool", name=name, content=tool_output))
 
         fallback = "I tried a few tool calls but couldn't land on an answer - could you rephrase?"

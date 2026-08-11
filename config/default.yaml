@@ -7,7 +7,7 @@ llm:
   host: "http://127.0.0.1:11434"
   model: "llama3.1:8b-instruct-q4_K_M"
   embedding_model: "nomic-embed-text"
-  temperature: 0.4
+  temperature: 0.2
   max_tokens: 1024
   context_window: 8192
   request_timeout_s: 120
@@ -19,6 +19,7 @@ memory:
   collection_name: "assistant_memory"
   max_history_turns: 20        # rolling conversation window kept verbatim
   retrieval_top_k: 5
+  fact_retrieval_threshold: 0.55
 
 audio:
   enabled: false               # flip true once whisper/piper are installed
@@ -41,3 +42,10 @@ assistant:
     claim to look things up online. Use the tools available to you when
     they would give a better answer than guessing. Be concise, direct,
     and honest about the limits of what you know or can verify offline.
+    When a user provides facts to remember, save every distinct fact. Use a
+    separate remember_fact tool call for each fact, such as a person's name
+    and their date of birth. Treat remembered values as the user's source of
+    truth; never replace their spelling with general world knowledge.
+    Use tools only through native tool calls. Never show tool-call JSON,
+    tool-call syntax, or plans for tool calls to the user. When a tool is
+    needed, call it and wait for its result before answering.

@@ -13,8 +13,13 @@ from pathlib import Path
 from assistant.config import get_settings
 from assistant.memory.db import MemoryDB
 from assistant.tools.registry import registry
+from assistant.memory.vector_store import VectorMemory
 
 _db = MemoryDB()
+_fact_memory = VectorMemory(
+    collection_name="assistant_facts",
+    collection_metadata={"hnsw:space": "cosine"},
+)
 
 
 def _notes_path() -> Path:
@@ -50,7 +55,14 @@ def take_note(text: str) -> str:
         "required": [],
     },
 )
-def read_notes(limit: int = 10) -> str:
+def read_notes(limit: int | str = 10) -> str:
+    """Return recent notes while tolerating string arguments from local models."""
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError):
+        limit = 10
+
+    limit = max(1, min(limit, 100))
     path = _notes_path()
     if not path.exists():
         return "No notes saved yet."
@@ -60,7 +72,11 @@ def read_notes(limit: int = 10) -> str:
 
 @registry.register(
     name="remember_fact",
-    description="Store a durable fact about the user (e.g. preferences) under a short key, for exact recall later.",
+    description=(
+        "Store one durable fact about the user under a short key for exact recall later. "
+        "When the user provides multiple distinct facts, call this tool separately "
+        "for each fact."
+    ),
     parameters={
         "type": "object",
         "properties": {
@@ -71,22 +87,51 @@ def read_notes(limit: int = 10) -> str:
     },
 )
 def remember_fact(key: str, value: str) -> str:
-    _db.set_fact(key, value)
-    return f"Remembered: {key} = {value}"
+    normalized_key = key.strip().lower().replace(" ", "_").replace("-", "_")
+    clean_value = value.strip()
+
+    _db.set_fact(normalized_key, clean_value)
+    _fact_memory.upsert_fact(normalized_key, clean_value)
+
+    readable_key = normalized_key.replace("_", " ")
+    return f"I'll remember that your {readable_key} is {clean_value}."
 
 
 @registry.register(
     name="recall_fact",
-    description="Look up a previously remembered fact by its key.",
+    description=(
+        "Recall a previously remembered fact. Pass the user's full natural-language "
+        "question, for example 'Who is my son?' or 'What is my favorite color?'."
+    ),
     parameters={
         "type": "object",
-        "properties": {"key": {"type": "string", "description": "The fact's key."}},
-        "required": ["key"],
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "The user's natural-language memory question."
+            }
+        },
+        "required": ["query"],
     },
 )
-def recall_fact(key: str) -> str:
-    value = _db.get_fact(key)
-    return value if value is not None else f"No fact stored under '{key}'."
+def recall_fact(query: str) -> str:
+    normalized_query = query.strip().lower().replace(" ", "_").replace("-", "_")
+
+    # First: fast exact lookup for a real key such as "son_name".
+    value = _db.get_fact(normalized_query)
+    if value is not None:
+        return value
+
+    # Second: semantic lookup for questions such as "Who is my son?"
+    hits = _fact_memory.recall(query, top_k=1)
+    if hits and hits[0].score > get_settings().memory.fact_retrieval_threshold:
+        fact_key = hits[0].metadata.get("key")
+        if fact_key:
+            value = _db.get_fact(fact_key)
+            if value is not None:
+                return value
+
+    return "I don't have a matching remembered fact."
 
 
 _ALLOWED_OPS = {

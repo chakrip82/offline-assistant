@@ -27,7 +27,12 @@ class MemoryHit:
 
 
 class VectorMemory:
-    def __init__(self, engine: OllamaEngine | None = None):
+    def __init__(
+        self,
+        engine: OllamaEngine | None = None,
+        collection_name: str | None = None,
+        collection_metadata: dict | None = None,
+    ):
         settings = get_settings()
         self.settings = settings
         self.engine = engine or OllamaEngine(settings)
@@ -35,7 +40,8 @@ class VectorMemory:
             path=str(settings.resolved_path(settings.memory.vector_dir))
         )
         self._collection = self._client.get_or_create_collection(
-            name=settings.memory.collection_name
+            name=collection_name or settings.memory.collection_name,
+            metadata=collection_metadata,
         )
 
     def remember(self, text: str, metadata: dict | None = None) -> None:
@@ -50,6 +56,30 @@ class VectorMemory:
             embeddings=[embedding],
             documents=[text],
             metadatas=[{**(metadata or {}), "ts": time.time()}],
+        )
+
+    def upsert_fact(self, key: str, value: str) -> None:
+        """Store the current version of a durable fact for semantic recall."""
+        normalized_key = key.strip().lower()
+        readable_key = normalized_key.replace("_", " ")
+
+        document = f"Fact about the user: {readable_key} is {value}."
+
+        try:
+            embedding = self.engine.embed(document)
+        except Exception as e:  # noqa: BLE001
+            log.warning("Skipping fact vector write, embedding failed: %s", e)
+            return
+
+        self._collection.upsert(
+            ids=[f"fact:{normalized_key}"],
+            embeddings=[embedding],
+            documents=[document],
+            metadatas=[{
+                "type": "fact",
+                "key": normalized_key,
+                "ts": time.time(),
+            }],
         )
 
     def recall(self, query: str, top_k: int | None = None) -> list[MemoryHit]:

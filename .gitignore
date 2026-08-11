@@ -1,0 +1,11 @@
+.DS_Store
+
+data/
+__pycache__/
+*.py[cod]
+
+.venv/
+venv/
+.env
+.env.*
+config/config.yaml

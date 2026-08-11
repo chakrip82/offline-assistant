@@ -39,6 +39,7 @@ class MemoryConfig(BaseModel):
     collection_name: str = "assistant_memory"
     max_history_turns: int = 20
     retrieval_top_k: int = 5
+    fact_retrieval_threshold: float = 0.3
 
 
 class AudioConfig(BaseModel):
