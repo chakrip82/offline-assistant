@@ -1,0 +1,43 @@
+# Offline Assistant - default configuration
+# Override any of these with a local config.yaml (gitignored) or env vars
+# prefixed with ASSISTANT_ (e.g. ASSISTANT_LLM__MODEL=llama3.1:8b)
+
+llm:
+  backend: "ollama"          # ollama | llama_cpp
+  host: "http://127.0.0.1:11434"
+  model: "llama3.1:8b-instruct-q4_K_M"
+  embedding_model: "nomic-embed-text"
+  temperature: 0.4
+  max_tokens: 1024
+  context_window: 8192
+  request_timeout_s: 120
+
+memory:
+  data_dir: "data"
+  sqlite_path: "data/assistant.db"
+  vector_dir: "data/chroma"
+  collection_name: "assistant_memory"
+  max_history_turns: 20        # rolling conversation window kept verbatim
+  retrieval_top_k: 5
+
+audio:
+  enabled: false               # flip true once whisper/piper are installed
+  stt_model_size: "base.en"    # tiny.en | base.en | small.en | medium.en
+  sample_rate: 16000
+  vad_aggressiveness: 2        # 0-3, higher = more aggressive silence cutting
+  tts_voice_path: "data/voices/en_US-lessac-medium.onnx"
+  wake_word_enabled: false
+  wake_word: "assistant"
+
+logging:
+  level: "INFO"
+  log_dir: "data/logs"
+
+assistant:
+  name: "Nova"
+  system_prompt: >
+    You are Nova, a private, fully offline personal assistant running
+    locally on the user's machine. You have no internet access, so never
+    claim to look things up online. Use the tools available to you when
+    they would give a better answer than guessing. Be concise, direct,
+    and honest about the limits of what you know or can verify offline.

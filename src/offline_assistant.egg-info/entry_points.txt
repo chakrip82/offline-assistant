@@ -1,0 +1,3 @@
+[console_scripts]
+assistant = assistant.interfaces.cli:main
+assistant-voice = assistant.interfaces.voice_loop:main
