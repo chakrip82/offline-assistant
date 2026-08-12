@@ -46,6 +46,11 @@ assistant:
     separate remember_fact tool call for each fact, such as a person's name
     and their date of birth. Treat remembered values as the user's source of
     truth; never replace their spelling with general world knowledge.
+    When remembering people in a group, use a unique key for each person,
+    such as atlassian_teammate_nikhil_sarda. For questions asking for a
+    list of remembered items, use search_facts rather than recall_fact. When
+    listing a known group, provide its stable key prefix to search_facts; for
+    example, use key_prefix 'atlassian_team' to list Atlassian teammates.
     Use tools only through native tool calls. Never show tool-call JSON,
     tool-call syntax, or plans for tool calls to the user. When a tool is
     needed, call it and wait for its result before answering.

@@ -134,6 +134,86 @@ def recall_fact(query: str) -> str:
     return "I don't have a matching remembered fact."
 
 
+@registry.register(
+    name="search_facts",
+    description=(
+        "Find multiple remembered facts related to a natural-language query. "
+        "Use this for list questions, such as 'Who are my teammates at Atlassian?' "
+        "Do not use it when the user asks for one specific fact."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "The natural-language description of the facts to find.",
+            },
+            "limit": {
+                "type": "integer",
+                "description": "Maximum number of facts to return; default 10.",
+            },
+            "key_prefix": {
+                "type": "string",
+                "description": (
+                    "Optional normalized fact-key prefix for an exact group filter, "
+                    "for example 'atlassian_team' for Atlassian teammates."
+                ),
+            },
+        },
+        "required": ["query"],
+    },
+)
+def search_facts(
+    query: str,
+    limit: int | str = 10,
+    key_prefix: str | None = None,
+) -> str:
+    """Return all confidently matching durable facts for a list-style question."""
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError):
+        limit = 10
+
+    limit = max(1, min(limit, 20))
+
+    # A key prefix is the most reliable way to list a known group. It avoids
+    # semantically related but incorrect results, such as a manager appearing
+    # in a request for teammates.
+    if key_prefix:
+        normalized_prefix = key_prefix.strip().lower().replace(" ", "_").replace("-", "_")
+        matches = [
+            value
+            for key, value in _db.all_facts().items()
+            if key.startswith(normalized_prefix)
+        ][:limit]
+        if matches:
+            return "\n".join(f"- {value}" for value in matches)
+        return "I don't have matching remembered facts."
+
+    threshold = get_settings().memory.fact_retrieval_threshold
+    hits = _fact_memory.recall(query, top_k=limit)
+    matches: list[str] = []
+    seen_keys: set[str] = set()
+
+    for hit in hits:
+        if hit.score < threshold:
+            continue
+
+        fact_key = hit.metadata.get("key")
+        if not fact_key or fact_key in seen_keys:
+            continue
+
+        value = _db.get_fact(fact_key)
+        if value is not None:
+            matches.append(value)
+            seen_keys.add(fact_key)
+
+    if not matches:
+        return "I don't have matching remembered facts."
+
+    return "\n".join(f"- {value}" for value in matches)
+
+
 _ALLOWED_OPS = {
     ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul,
     ast.Div: operator.truediv, ast.Pow: operator.pow, ast.Mod: operator.mod,

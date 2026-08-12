@@ -103,7 +103,7 @@ class Orchestrator:
                 # so the language model cannot alter their spelling or replace them
                 # with unrelated world knowledge. Saved facts continue through the
                 # loop, allowing the model to save additional facts from one turn.
-                if name == "recall_fact":
+                if name in {"recall_fact", "search_facts"}:
                     self.db.add_turn(self.session_id, "assistant", tool_output)
                     self._maybe_store_long_term(user_text, tool_output)
                     return TurnResult(text=tool_output, tool_calls_made=tools_used)
