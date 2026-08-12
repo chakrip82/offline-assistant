@@ -74,6 +74,7 @@ class Orchestrator:
         self.db.add_turn(self.session_id, "user", user_text)
         messages = self._build_messages(user_text)
         tools_used: list[str] = []
+        remembered_facts: list[str] = []
 
         for _ in range(MAX_TOOL_HOPS):
             try:
@@ -107,7 +108,19 @@ class Orchestrator:
                     self._maybe_store_long_term(user_text, tool_output)
                     return TurnResult(text=tool_output, tool_calls_made=tools_used)
 
+                if name == "remember_fact":
+                    remembered_facts.append(tool_output)
+
                 messages.append(ChatMessage(role="tool", name=name, content=tool_output))
+
+            # The model can issue multiple remember_fact calls in one response.
+            # Return their exact confirmations directly instead of allowing a
+            # follow-up model response to invent a notes summary.
+            if remembered_facts:
+                confirmation = "\n".join(remembered_facts)
+                self.db.add_turn(self.session_id, "assistant", confirmation)
+                self._maybe_store_long_term(user_text, confirmation)
+                return TurnResult(text=confirmation, tool_calls_made=tools_used)
 
         fallback = "I tried a few tool calls but couldn't land on an answer - could you rephrase?"
         self.db.add_turn(self.session_id, "assistant", fallback)
